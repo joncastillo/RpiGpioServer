@@ -7,7 +7,8 @@ import pigpio
 import jwt
 import numpy as np
 import simpleaudio as sa
-from playsound import playsound
+from pydub import AudioSegment
+from pydub.playback import play
 from dateutil import parser
 from datetime import datetime, timedelta, timezone
 
@@ -88,7 +89,7 @@ class Hw_Abstraction:
                 elif event_type.lower() == 'play_mp3':
                     self._play_mp3_files_in_background(param1)
                 elif event_type.lower() == 'play_tones':
-                    self._play_tones_in_background(param1)
+                    Hw_Abstraction.play_tones_in_background(param1)
                 else:
                     raise ValueError(f"Invalid event type: {event_type}")
 
@@ -185,19 +186,15 @@ class Hw_Abstraction:
 
         return {"status": "OK"}
 
-    def _play_tones_in_background(self, tones):
+    @staticmethod
+    def play_tones_in_background(tones):
         def play_tones():
-            for tone in tones:
-                frequency = tone['freq']
-                duration = tone['duration'] / 1000
-                self.generate_and_play_tone(frequency, duration)
+            audio_sequence = np.concatenate([Hw_Abstraction.generate_tone(tone["freq"], tone["duration"]) for tone in tones])
+            play_obj = sa.play_buffer(audio_sequence, 1, 2, 44100)
+            play_obj.wait_done()
+
         threading.Thread(target=play_tones, daemon=True).start()
 
-    def _play_mp3_files_in_background(self, mp3_files):
-        def play_files():
-            for mp3_file in mp3_files:
-                playsound(f'/opt/{mp3_file}')
-        threading.Thread(target=play_files, daemon=True).start()
 
     def _schedule_event(self, delay, event_type, param1, param2, event_name):
         def event_task():
@@ -222,9 +219,9 @@ class Hw_Abstraction:
                     else:
                         self.pi.write(output_pin, 0)
             elif event_type.lower() == 'play_mp3':
-                self.play_mp3_files_in_background(param1)
+                Hw_Abstraction.play_mp3_files_in_background(param1)
             elif event_type.lower() == 'play_tones':
-                self.play_tones_in_background(param1)
+                Hw_Abstraction.play_tones_in_background(param1)
             else:
                 raise ValueError(f"Invalid event type: {event_type}")
 
@@ -236,3 +233,36 @@ class Hw_Abstraction:
             "timer": timer,
             "trigger_time": (datetime.now() + timedelta(seconds=delay)).isoformat()
         })
+
+
+    @staticmethod
+    def generate_tone(frequency, duration, sample_rate=44100, amplitude=0.5):
+        t = np.linspace(0, float(duration) / 1000, int(sample_rate * duration / 1000), False)
+        wave = amplitude * np.sin(2 * np.pi * float(frequency) * t)
+        audio = (wave * 32767).astype(np.int16)
+        return audio
+
+    @staticmethod
+    def play_mp3_files_in_background(mp3_files):
+        def play_files():
+            for mp3_file in mp3_files:
+                audio = AudioSegment.from_file(mp3_file)
+                play(audio)
+        threading.Thread(target=play_files, daemon=True).start()
+
+    @staticmethod
+    def testTone():
+        Hw_Abstraction.play_tones_in_background([
+            {"freq": 392, "duration": 500},
+            {"freq": 440, "duration": 500},
+            {"freq": 349, "duration": 500},
+            {"freq": 174, "duration": 500},
+            {"freq": 261, "duration": 1500},
+        ])
+
+
+if __name__ == '__main__':
+    #Hw_Abstraction.play_mp3_files_in_background([f'./keep-the-change-ya-filthy-animal.mp3'])
+    #time.sleep(5)
+    Hw_Abstraction.testTone()
+    time.sleep(5)
