@@ -115,7 +115,7 @@ class Hw_Abstraction:
             delay = (trigger_datetime - now).total_seconds()
 
             if delay > 0:
-                self._schedule_event(delay, event_type, param1, param2, event_name)
+                self._schedule_event(delay, event_type, param1, param2, param3, event_name)
 
         return {"status": "OK", "scheduled_events": triggered_events}
 
@@ -160,7 +160,7 @@ class Hw_Abstraction:
             else:
                 raise ValueError(f"Invalid event type: {event_type}")
 
-        return {"status": "Immediate event(s) triggered", "triggered_events": triggered_events}
+        return {"status": "OK", "triggered_events": triggered_events}
 
     def delete_events(self, events):
         for event in events:
@@ -196,7 +196,7 @@ class Hw_Abstraction:
         threading.Thread(target=play_tones, daemon=True).start()
 
 
-    def _schedule_event(self, delay, event_type, param1, param2, event_name):
+    def _schedule_event(self, delay, event_type, param1, param2, param3, event_name):
         def event_task():
             print(f"Executing scheduled event: {event_name} at {datetime.now()}")
             if event_type.lower() == 'gpio':
@@ -213,7 +213,7 @@ class Hw_Abstraction:
                         self.pi.set_PWM_frequency(output_pin, int(param2))
                     else:
                         self.pi.write(output_pin, 1)
-                    time.sleep(param2 / 1000)
+                    time.sleep(param3 / 1000)
                     if self.pin_map.get(param1, {}).get("pin_type") == "PWM":
                         self.pi.set_PWM_frequency(output_pin, 0)
                     else:
