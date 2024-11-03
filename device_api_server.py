@@ -1,5 +1,6 @@
 from device_hw_abstraction import Hw_Abstraction
 from flask import Flask, request, jsonify
+from lifx_lighting_controller import Lifx_Lighting_Controller
 
 app = Flask(__name__)
 
@@ -44,6 +45,14 @@ def delete_all_events():
     response = hwAbstraction.delete_all_events()
     return jsonify(response)
 
+@app.route('/configure_lighting', methods=['POST'])
+def configure_lighting():
+    data = request.get_json()
+    response = lifx_lightning_controller.configure_lighting(data.get('lighting_list'))
+    return jsonify(response)
+
+
 if __name__ == '__main__':
     hwAbstraction = Hw_Abstraction()
+    lifx_lightning_controller = Lifx_Lighting_Controller
     app.run(debug=True, host='0.0.0.0')

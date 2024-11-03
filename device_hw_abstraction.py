@@ -12,32 +12,38 @@ from pydub.playback import play
 from dateutil import parser
 from datetime import datetime, timedelta, timezone
 
+
 class Hw_Abstraction:
     def __init__(self):
         self.pi = pigpio.pi()
         self.pin_map = {}
         self.timed_events = []
         self.event_callbacks = {}
+        self.last_trigger_time = time.time()
 
     def initialize_gpio_pins(self, gpio_pins):
         self.pin_map = {}
         for pin_config in gpio_pins:
             gpio_name = pin_config['gpio_name']
-            pin_number = pin_config['pin_number']
+            gpio_number = pin_config['pin_number']
             pin_type = pin_config['pin_type']
 
+            # only when one controller serves both hw_abstraction and lighting control:
+            #if f"INPUT_{gpio_number}" in Lifx_Lighting_Controller.reserved_pin_map:
+            #    raise ValueError(f"ERROR, Reserved: GPIO_{gpio_number}.")
+
             if pin_type.lower() == 'input':
-                self.pi.set_mode(pin_number, pigpio.INPUT)
+                self.pi.set_mode(gpio_number, pigpio.INPUT)
             elif pin_type.lower() == 'output':
-                self.pi.set_mode(pin_number, pigpio.OUTPUT)
+                self.pi.set_mode(gpio_number, pigpio.OUTPUT)
             elif pin_type.lower() == 'pwm':
-                self.pi.set_mode(pin_number, pigpio.OUTPUT)
-                self.pi.set_PWM_frequency(pin_number, 0)
+                self.pi.set_mode(gpio_number, pigpio.OUTPUT)
+                self.pi.set_PWM_frequency(gpio_number, 0)
             else:
                 raise ValueError(f"Invalid pin_type: {pin_type}")
 
             self.pin_map[gpio_name] = {
-                'pin_number': pin_number,
+                'pin_number': gpio_number,
                 'pin_type': pin_type
             }
 
@@ -64,6 +70,12 @@ class Hw_Abstraction:
             delay = delay_before_start / 1000
 
             def event_callback(gpio, level, tick):
+                current_time = time.time()
+                if current_time - self.last_trigger_time < 0.2:  # Debounce interval of 200ms
+                    return
+                self.last_trigger_time = current_time
+                time.sleep(1)
+
                 time.sleep(delay)
                 if event_type.lower() == 'gpio':
                     gpio_name = param1
@@ -189,12 +201,12 @@ class Hw_Abstraction:
     @staticmethod
     def play_tones_in_background(tones):
         def play_tones():
-            audio_sequence = np.concatenate([Hw_Abstraction.generate_tone(tone["freq"], tone["duration"]) for tone in tones])
+            audio_sequence = np.concatenate(
+                [Hw_Abstraction.generate_tone(tone["freq"], tone["duration"]) for tone in tones])
             play_obj = sa.play_buffer(audio_sequence, 1, 2, 44100)
             play_obj.wait_done()
 
         threading.Thread(target=play_tones, daemon=True).start()
-
 
     def _schedule_event(self, delay, event_type, param1, param2, param3, event_name):
         def event_task():
@@ -234,7 +246,6 @@ class Hw_Abstraction:
             "trigger_time": (datetime.now() + timedelta(seconds=delay)).isoformat()
         })
 
-
     @staticmethod
     def generate_tone(frequency, duration, sample_rate=44100, amplitude=0.5):
         t = np.linspace(0, float(duration) / 1000, int(sample_rate * duration / 1000), False)
@@ -248,6 +259,7 @@ class Hw_Abstraction:
             for mp3_file in mp3_files:
                 audio = AudioSegment.from_file(mp3_file)
                 play(audio)
+
         threading.Thread(target=play_files, daemon=True).start()
 
     @staticmethod
@@ -262,7 +274,7 @@ class Hw_Abstraction:
 
 
 if __name__ == '__main__':
-    #Hw_Abstraction.play_mp3_files_in_background([f'./keep-the-change-ya-filthy-animal.mp3'])
-    #time.sleep(5)
+    # Hw_Abstraction.play_mp3_files_in_background([f'./keep-the-change-ya-filthy-animal.mp3'])
+    # time.sleep(5)
     Hw_Abstraction.testTone()
     time.sleep(5)
